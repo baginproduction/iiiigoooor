@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Операционная модель — Игорь Малышев</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0a0f1a; }
+    input[type=range] { -webkit-appearance: none; appearance: none; outline: none; cursor: pointer; }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: #3b82f6;
+      border: 2px solid #60a5fa;
+      cursor: pointer;
+      margin-top: -5px;
+    }
+    input[type=range]::-moz-range-thumb {
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: #3b82f6;
+      border: 2px solid #60a5fa;
+      cursor: pointer;
+    }
+    button { font-family: 'Inter', sans-serif; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useMemo } = React;
+
+    const COLORS = {
+      bg: "#0a0f1a",
+      card: "#111827",
+      cardBorder: "#1e293b",
+      accent: "#3b82f6",
+      accentLight: "#60a5fa",
+      green: "#10b981",
+      greenDark: "#059669",
+      red: "#ef4444",
+      orange: "#f59e0b",
+      yellow: "#fbbf24",
+      text: "#e2e8f0",
+      textMuted: "#94a3b8",
+      textDim: "#64748b",
+      surface: "#1e293b",
+      surfaceHover: "#334155",
+    };
+
+    function fmt(n) {
+      if (n >= 1000000) return (n / 1000000).toFixed(1) + "М";
+      if (n >= 1000) return Math.round(n / 1000) + "К";
+      return Math.round(n).toLocaleString("ru-RU");
+    }
+
+    function fmtFull(n) {
+      return Math.round(n).toLocaleString("ru-RU");
+    }
+
+    function Slider({ label, value, onChange, min, max, step = 1, unit = "", hint }) {
+      const pct = ((value - min) / (max - min)) * 100;
+      return (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+            <span style={{ fontSize: 13, color: COLORS.textMuted }}>{label}</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.accentLight, fontFamily: "'JetBrains Mono', monospace" }}>
+              {typeof value === "number" ? fmtFull(value) : value}{unit}
+            </span>
+          </div>
+          <input
+            type="range"
+            min={min}
+            max={max}
+            step={step}
+            value={value}
+            onChange={(e) => onChange(Number(e.target.value))}
+            style={{
+              width: "100%",
+              height: 6,
+              background: `linear-gradient(to right, ${COLORS.accent} ${pct}%, ${COLORS.surface} ${pct}%)`,
+              borderRadius: 3,
+            }}
+          />
+          {hint && <div style={{ fontSize: 11, color: COLORS.textDim, marginTop: 2 }}>{hint}</div>}
+        </div>
+      );
+    }
+
+    function Card({ title, children, accent, style }) {
+      return (
+        <div style={{
+          background: COLORS.card,
+          border: `1px solid ${accent || COLORS.cardBorder}`,
+          borderRadius: 12,
+          padding: "18px 20px",
+          ...style,
+        }}>
+          {title && (
+            <div style={{ fontSize: 13, fontWeight: 600, color: accent || COLORS.textMuted, textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 14 }}>
+              {title}
+            </div>
+          )}
+          {children}
+        </div>
+      );
+    }
+
+    function Bar({ label, value, maxVal, color, amount }) {
+      const pct = maxVal > 0 ? Math.min((value / maxVal) * 100, 100) : 0;
+      return (
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}>
+            <span style={{ color: COLORS.textMuted }}>{label}</span>
+            <span style={{ color, fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>{amount}</span>
+          </div>
+          <div style={{ height: 8, background: COLORS.surface, borderRadius: 4, overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: 4, transition: "width 0.3s ease" }} />
+          </div>
+        </div>
+      );
+    }
+
+    function TeamRow({ role, count, salary, total }) {
+      return (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: `1px solid ${COLORS.surface}`, fontSize: 13 }}>
+          <div style={{ flex: 2, color: COLORS.text }}>{role}</div>
+          <div style={{ flex: 1, textAlign: "center", color: COLORS.textMuted, fontFamily: "'JetBrains Mono', monospace" }}>{count}</div>
+          <div style={{ flex: 1, textAlign: "right", color: COLORS.textMuted, fontFamily: "'JetBrains Mono', monospace" }}>{fmt(salary)}</div>
+          <div style={{ flex: 1, textAlign: "right", color: COLORS.accentLight, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>{fmt(total)}</div>
+        </div>
+      );
+    }
+
+    function OperationalModel() {
+      const [autopodbor, setAutopodbor] = useState(35);
+      const [autopodborCheck, setAutopodborCheck] = useState(100000);
+      const [osmotry, setOsmotry] = useState(15);
+      const [komissiya, setKomissiya] = useState(5);
+      const [komissiyaCheck, setKomissiyaCheck] = useState(90000);
+      const [pereprodazha, setPereprodazha] = useState(4);
+      const [pereprodazhaMargin, setPereprodazhaMargin] = useState(400000);
+
+      const [inspectorPay, setInspectorPay] = useState(6000);
+      const [inspectionsPerDeal, setInspectionsPerDeal] = useState(2.5);
+      const [inspectorCapacity, setInspectorCapacity] = useState(25);
+      const [managerSalary, setManagerSalary] = useState(80000);
+      const [managerBonus, setManagerBonus] = useState(5000);
+      const [dealsPerManager, setDealsPerManager] = useState(20);
+
+      const [qualRate, setQualRate] = useState(20);
+      const [closeRate, setCloseRate] = useState(30);
+      const [osmotryConvFromDropoff, setOsmotryConvFromDropoff] = useState(5);
+
+      const [contentCost, setContentCost] = useState(200000);
+      const [adminCost, setAdminCost] = useState(75000);
+      const [opsCost, setOpsCost] = useState(150000);
+      const [coordinatorCost, setCoordinatorCost] = useState(70000);
+      const [taxRate, setTaxRate] = useState(6);
+
+      const [activeTab, setActiveTab] = useState("products");
+
+      const model = useMemo(() => {
+        const revAutopodbor = autopodbor * autopodborCheck;
+        const revOsmotry = osmotry * 14000;
+        const revKomissiya = komissiya * komissiyaCheck;
+        const revPereprodazha = pereprodazha * pereprodazhaMargin;
+        const totalRevenue = revAutopodbor + revOsmotry + revKomissiya + revPereprodazha;
+
+        const inspAutopodbor = autopodbor * inspectionsPerDeal;
+        const inspOsmotry = osmotry;
+        const inspKomissiya = komissiya * 1;
+        const inspPereprodazha = pereprodazha * 2;
+        const totalInspections = inspAutopodbor + inspOsmotry + inspKomissiya + inspPereprodazha;
+
+        const inspectorsNeeded = Math.ceil(totalInspections / inspectorCapacity);
+        const totalDeals = autopodbor + komissiya + pereprodazha;
+        const managersNeeded = Math.max(1, Math.ceil(totalDeals / dealsPerManager));
+
+        const inspectorCostTotal = totalInspections * inspectorPay;
+        const managerCostTotal = managersNeeded * (managerSalary + managerBonus * dealsPerManager);
+        const totalTeamCost = inspectorCostTotal + managerCostTotal + contentCost + adminCost + coordinatorCost;
+        const totalCost = totalTeamCost + opsCost;
+
+        const fullServiceDeals = autopodbor + komissiya + pereprodazha;
+        const qualifiedNeeded = closeRate > 0 ? Math.ceil(fullServiceDeals / (closeRate / 100)) : 0;
+        const totalLeadsNeeded = qualRate > 0 ? Math.ceil(qualifiedNeeded / (qualRate / 100)) : 0;
+        const leadsPerWeek = Math.ceil(totalLeadsNeeded / 4.3);
+        const leadsPerDay = Math.ceil(leadsPerWeek / 7);
+
+        const dropoffs = totalLeadsNeeded * (1 - qualRate / 100);
+        const osmotryFromDropoffs = Math.round(dropoffs * (osmotryConvFromDropoff / 100));
+
+        const taxes = totalRevenue * (taxRate / 100);
+        const netProfit = totalRevenue - totalCost - taxes;
+        const margin = totalRevenue > 0 ? (netProfit / totalRevenue * 100) : 0;
+
+        const currentProfit = 920000;
+        const growthMultiple = currentProfit > 0 ? netProfit / currentProfit : 0;
+
+        const totalHeadcount = inspectorsNeeded + managersNeeded + 1 + 1 + 1 + 1;
+
+        return {
+          revAutopodbor, revOsmotry, revKomissiya, revPereprodazha, totalRevenue,
+          totalInspections, inspectorsNeeded, managersNeeded,
+          inspectorCostTotal, managerCostTotal, totalTeamCost, totalCost, opsCost,
+          contentCost, adminCost, coordinatorCost,
+          qualifiedNeeded, totalLeadsNeeded, leadsPerWeek, leadsPerDay, osmotryFromDropoffs,
+          taxes, netProfit, margin, growthMultiple, totalHeadcount,
+          fullServiceDeals,
+        };
+      }, [autopodbor, autopodborCheck, osmotry, komissiya, komissiyaCheck, pereprodazha, pereprodazhaMargin,
+        inspectorPay, inspectionsPerDeal, inspectorCapacity, managerSalary, managerBonus, dealsPerManager,
+        qualRate, closeRate, osmotryConvFromDropoff, contentCost, adminCost, opsCost, coordinatorCost, taxRate]);
+
+      const profitColor = model.netProfit >= 3000000 ? COLORS.green : model.netProfit >= 2000000 ? COLORS.orange : COLORS.red;
+      const inTarget = model.netProfit >= 3000000 && model.netProfit <= 5500000;
+
+      const tabs = [
+        { id: "products", label: "Продукты" },
+        { id: "team", label: "Команда" },
+        { id: "funnel", label: "Воронка" },
+        { id: "overhead", label: "Накладные" },
+      ];
+
+      return (
+        <div style={{
+          fontFamily: "'Inter', -apple-system, sans-serif",
+          background: COLORS.bg,
+          color: COLORS.text,
+          minHeight: "100vh",
+          padding: "24px 16px",
+        }}>
+          {/* Header */}
+          <div style={{ maxWidth: 900, margin: "0 auto", marginBottom: 24 }}>
+            <div style={{ fontSize: 11, color: COLORS.accent, textTransform: "uppercase", letterSpacing: 2, marginBottom: 4 }}>Операционная модель</div>
+            <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, lineHeight: 1.3 }}>
+              Масштабирование бизнеса Игоря Малышева
+            </h1>
+            <div style={{ fontSize: 13, color: COLORS.textDim, marginTop: 4 }}>
+              Цель: 3–5 млн ₽/мес чистой прибыли · Текущая точка: ~920К ₽/мес
+            </div>
+          </div>
+
+          {/* KPI Dashboard */}
+          <div style={{ maxWidth: 900, margin: "0 auto", display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
+            <Card style={{
+              background: `linear-gradient(135deg, ${COLORS.card}, ${model.netProfit >= 3000000 ? '#0d2818' : model.netProfit >= 2000000 ? '#2a1a00' : '#2a0a0a'})`,
+              border: `1px solid ${profitColor}40`,
+            }}>
+              <div style={{ fontSize: 11, color: COLORS.textDim }}>Чистая прибыль</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: profitColor, fontFamily: "'JetBrains Mono', monospace" }}>
+                {fmt(model.netProfit)}
+              </div>
+              <div style={{ fontSize: 11, color: COLORS.textDim }}>₽/мес · {inTarget ? "✓ в цели" : model.netProfit < 3000000 ? "↓ ниже цели" : "↑ выше цели"}</div>
+            </Card>
+            <Card>
+              <div style={{ fontSize: 11, color: COLORS.textDim }}>Выручка</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: COLORS.accentLight, fontFamily: "'JetBrains Mono', monospace" }}>
+                {fmt(model.totalRevenue)}
+              </div>
+              <div style={{ fontSize: 11, color: COLORS.textDim }}>₽/мес · маржа {model.margin.toFixed(0)}%</div>
+            </Card>
+            <Card>
+              <div style={{ fontSize: 11, color: COLORS.textDim }}>Команда</div>
+              <div style={{ fontSize: 24, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>
+                {model.totalHeadcount}
+              </div>
+              <div style={{ fontSize: 11, color: COLORS.textDim }}>чел · + Игорь</div>
+            </Card>
+            <Card>
+              <div style={{ fontSize: 11, color: COLORS.textDim }}>Лиды нужно</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: model.leadsPerWeek > 100 ? COLORS.orange : COLORS.text, fontFamily: "'JetBrains Mono', monospace" }}>
+                {model.leadsPerWeek}
+              </div>
+              <div style={{ fontSize: 11, color: COLORS.textDim }}>в неделю · сейчас ~70</div>
+            </Card>
+          </div>
+
+          {/* Growth multiple */}
+          <div style={{ maxWidth: 900, margin: "0 auto", marginBottom: 20 }}>
+            <Card>
+              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                <div style={{ fontSize: 13, color: COLORS.textMuted, flex: 1 }}>Рост vs текущее состояние</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: model.growthMultiple >= 3 ? COLORS.green : COLORS.orange, fontFamily: "'JetBrains Mono', monospace" }}>
+                  ×{model.growthMultiple.toFixed(1)}
+                </div>
+              </div>
+              <div style={{ height: 8, background: COLORS.surface, borderRadius: 4, marginTop: 10, position: "relative" }}>
+                <div style={{
+                  position: "absolute",
+                  left: `${(3000000 / 6000000) * 100}%`,
+                  width: `${((5000000 - 3000000) / 6000000) * 100}%`,
+                  height: "100%",
+                  background: `${COLORS.green}20`,
+                  borderRadius: 4,
+                  border: `1px dashed ${COLORS.green}40`,
+                }} />
+                <div style={{
+                  height: "100%",
+                  width: `${Math.min((model.netProfit / 6000000) * 100, 100)}%`,
+                  background: profitColor,
+                  borderRadius: 4,
+                  transition: "width 0.3s ease",
+                }} />
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: COLORS.textDim, marginTop: 4 }}>
+                <span>0</span><span>3М (мин)</span><span>5М (макс)</span><span>6М+</span>
+              </div>
+            </Card>
+          </div>
+
+          <div style={{ maxWidth: 900, margin: "0 auto", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            {/* Left: Controls */}
+            <div>
+              <div style={{ display: "flex", gap: 4, marginBottom: 12 }}>
+                {tabs.map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => setActiveTab(t.id)}
+                    style={{
+                      flex: 1,
+                      padding: "8px 4px",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      background: activeTab === t.id ? COLORS.accent : COLORS.card,
+                      color: activeTab === t.id ? "#fff" : COLORS.textMuted,
+                      border: `1px solid ${activeTab === t.id ? COLORS.accent : COLORS.cardBorder}`,
+                      borderRadius: 8,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+
+              <Card>
+                {activeTab === "products" && (
+                  <>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.accent, marginBottom: 14 }}>Микс продуктов (сделок/мес)</div>
+                    <Slider label="Автоподбор — сделок" value={autopodbor} onChange={setAutopodbor} min={5} max={80} hint="Основной продукт. Сейчас ~12-13" />
+                    <Slider label="Средний чек автоподбора" value={autopodborCheck} onChange={setAutopodborCheck} min={85000} max={160000} step={5000} unit=" ₽" hint="85К–140К, новые с платформы 140К" />
+                    <Slider label="Разовые осмотры" value={osmotry} onChange={setOsmotry} min={0} max={40} hint="14К/шт. Лиды не дошедшие до подбора" />
+                    <Slider label="Комиссионные продажи" value={komissiya} onChange={setKomissiya} min={0} max={15} hint="80-100К за помощь в продаже" />
+                    <Slider label="Чек комиссии" value={komissiyaCheck} onChange={setKomissiyaCheck} min={60000} max={120000} step={5000} unit=" ₽" />
+                    <Slider label="Перепродажа авто" value={pereprodazha} onChange={setPereprodazha} min={0} max={10} hint="300-500К маржи, но нужен оборотный капитал" />
+                    <Slider label="Маржа перепродажи" value={pereprodazhaMargin} onChange={setPereprodazhaMargin} min={200000} max={600000} step={25000} unit=" ₽" />
+                  </>
+                )}
+
+                {activeTab === "team" && (
+                  <>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.accent, marginBottom: 14 }}>Параметры команды</div>
+                    <Slider label="Оплата за осмотр" value={inspectorPay} onChange={setInspectorPay} min={4000} max={10000} step={500} unit=" ₽" hint="Сдельная. Обсуждалось 5-7К" />
+                    <Slider label="Осмотров на 1 сделку" value={inspectionsPerDeal} onChange={setInspectionsPerDeal} min={1.5} max={4} step={0.5} hint="Сейчас 2-3" />
+                    <Slider label="Осмотров на инспектора/мес" value={inspectorCapacity} onChange={setInspectorCapacity} min={15} max={35} hint="~1-2 осмотра/день с учётом дороги" />
+                    <Slider label="Оклад менеджера" value={managerSalary} onChange={setManagerSalary} min={50000} max={130000} step={5000} unit=" ₽" hint="Клиентский менеджер (квалификация + ведение)" />
+                    <Slider label="Бонус менеджера за сделку" value={managerBonus} onChange={setManagerBonus} min={2000} max={10000} step={1000} unit=" ₽" />
+                    <Slider label="Сделок на менеджера/мес" value={dealsPerManager} onChange={setDealsPerManager} min={10} max={30} hint="Включая ведение клиента после подбора" />
+                  </>
+                )}
+
+                {activeTab === "funnel" && (
+                  <>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.accent, marginBottom: 14 }}>Воронка продаж</div>
+                    <Slider label="Квалификация (% лидов → подходят)" value={qualRate} onChange={setQualRate} min={10} max={40} unit="%" hint="Сейчас ~20%. CRM и контент могут улучшить" />
+                    <Slider label="Закрытие (% квалифицированных → сделка)" value={closeRate} onChange={setCloseRate} min={15} max={50} unit="%" hint="Сейчас ~27%. Follow-up, CRM, менеджеры улучшат" />
+                    <Slider label="% дропов → разовый осмотр" value={osmotryConvFromDropoff} onChange={setOsmotryConvFromDropoff} min={0} max={15} unit="%" hint="Из тех кто отвалился — допродажа осмотра" />
+                    <div style={{ marginTop: 12, padding: 12, background: COLORS.surface, borderRadius: 8 }}>
+                      <div style={{ fontSize: 12, color: COLORS.textMuted, marginBottom: 6 }}>Расчёт воронки</div>
+                      <div style={{ fontSize: 12, color: COLORS.text, lineHeight: 1.8 }}>
+                        <span style={{ color: COLORS.yellow, fontWeight: 600 }}>{fmtFull(model.totalLeadsNeeded)}</span> лидов/мес →{" "}
+                        <span style={{ color: COLORS.orange, fontWeight: 600 }}>{fmtFull(model.qualifiedNeeded)}</span> квалифицированных →{" "}
+                        <span style={{ color: COLORS.green, fontWeight: 600 }}>{model.fullServiceDeals}</span> сделок
+                        <br />
+                        + <span style={{ color: COLORS.textMuted }}>{model.osmotryFromDropoffs}</span> осмотров из дропов (потенциал)
+                        <br />
+                        Нужно <span style={{ fontWeight: 600, color: model.leadsPerDay > 15 ? COLORS.orange : COLORS.green }}>{model.leadsPerDay}</span> лидов/день ({model.leadsPerWeek}/нед)
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {activeTab === "overhead" && (
+                  <>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.accent, marginBottom: 14 }}>Накладные и прочее</div>
+                    <Slider label="Контент (Макарий + помощник)" value={contentCost} onChange={setContentCost} min={100000} max={350000} step={10000} unit=" ₽" hint="Сейчас ~130К (только Макарий)" />
+                    <Slider label="Админ (Полина + помощник)" value={adminCost} onChange={setAdminCost} min={30000} max={120000} step={5000} unit=" ₽" hint="Сейчас 20К (только Полина)" />
+                    <Slider label="Координатор/диспетчер" value={coordinatorCost} onChange={setCoordinatorCost} min={0} max={120000} step={5000} unit=" ₽" hint="Маршруты, расписание, связь с продавцами" />
+                    <Slider label="Операционка (бензин, отчёты, CRM, связь)" value={opsCost} onChange={setOpsCost} min={50000} max={400000} step={10000} unit=" ₽" hint="Сейчас ~115К. Вырастет с масштабом" />
+                    <Slider label="Налог (УСН)" value={taxRate} onChange={setTaxRate} min={1} max={15} unit="%" hint="УСН 6% от выручки или 15% от прибыли" />
+                  </>
+                )}
+              </Card>
+            </div>
+
+            {/* Right: Results */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <Card title="Выручка по продуктам">
+                <Bar label="Автоподбор" value={model.revAutopodbor} maxVal={model.totalRevenue} color={COLORS.accent} amount={fmt(model.revAutopodbor)} />
+                <Bar label="Перепродажа" value={model.revPereprodazha} maxVal={model.totalRevenue} color={COLORS.green} amount={fmt(model.revPereprodazha)} />
+                <Bar label="Комиссия" value={model.revKomissiya} maxVal={model.totalRevenue} color={COLORS.orange} amount={fmt(model.revKomissiya)} />
+                <Bar label="Разовые осмотры" value={model.revOsmotry} maxVal={model.totalRevenue} color={COLORS.yellow} amount={fmt(model.revOsmotry)} />
+              </Card>
+
+              <Card title="Оргструктура и ФОТ">
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", marginBottom: 6, borderBottom: `1px solid ${COLORS.cardBorder}` }}>
+                  <div style={{ flex: 2, fontSize: 11, color: COLORS.textDim }}>Роль</div>
+                  <div style={{ flex: 1, fontSize: 11, color: COLORS.textDim, textAlign: "center" }}>Кол-во</div>
+                  <div style={{ flex: 1, fontSize: 11, color: COLORS.textDim, textAlign: "right" }}>Ставка</div>
+                  <div style={{ flex: 1, fontSize: 11, color: COLORS.textDim, textAlign: "right" }}>Итого</div>
+                </div>
+                <TeamRow role="Осмотрщики" count={model.inspectorsNeeded} salary={model.inspectorsNeeded > 0 ? model.inspectorCostTotal / model.inspectorsNeeded : 0} total={model.inspectorCostTotal} />
+                <TeamRow role="Клиент-менеджеры" count={model.managersNeeded} salary={model.managersNeeded > 0 ? model.managerCostTotal / model.managersNeeded : 0} total={model.managerCostTotal} />
+                <TeamRow role="Координатор" count={1} salary={coordinatorCost} total={coordinatorCost} />
+                <TeamRow role="Контент" count={"1-2"} salary={contentCost} total={contentCost} />
+                <TeamRow role="Админ/бэк-офис" count={"1-2"} salary={adminCost} total={adminCost} />
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", marginTop: 4, fontSize: 13, fontWeight: 600 }}>
+                  <span>ФОТ итого</span>
+                  <span style={{ color: COLORS.accentLight, fontFamily: "'JetBrains Mono', monospace" }}>{fmt(model.totalTeamCost)}</span>
+                </div>
+              </Card>
+
+              <Card title="P&L / месяц" accent={profitColor}>
+                <div style={{ fontSize: 13, lineHeight: 2 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span>Выручка</span>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>{fmt(model.totalRevenue)}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", color: COLORS.textMuted }}>
+                    <span>— ФОТ команды</span>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>−{fmt(model.totalTeamCost)}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", color: COLORS.textMuted }}>
+                    <span>— Операционка</span>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>−{fmt(model.opsCost)}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", color: COLORS.textMuted }}>
+                    <span>— Налоги ({taxRate}%)</span>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>−{fmt(model.taxes)}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", borderTop: `2px solid ${profitColor}`, paddingTop: 6, marginTop: 4 }}>
+                    <span style={{ fontWeight: 700 }}>Чистая прибыль</span>
+                    <span style={{ fontWeight: 700, color: profitColor, fontFamily: "'JetBrains Mono', monospace", fontSize: 16 }}>{fmt(model.netProfit)}</span>
+                  </div>
+                </div>
+              </Card>
+
+              <Card style={{ background: `${COLORS.surface}80` }}>
+                <div style={{ fontSize: 12, color: COLORS.textMuted, lineHeight: 1.7 }}>
+                  <strong style={{ color: COLORS.text }}>Ключевые метрики:</strong><br />
+                  Осмотров/мес: <strong>{Math.round(model.totalInspections)}</strong> ·{" "}
+                  Сделок всего: <strong>{autopodbor + osmotry + komissiya + pereprodazha}</strong> ·{" "}
+                  Лидов/день: <strong>{model.leadsPerDay}</strong>
+                  <br />
+                  {model.leadsPerWeek > 140 && (
+                    <span style={{ color: COLORS.orange }}>⚠ Нужно {Math.round(model.leadsPerWeek / 70)}× больше лидов чем сейчас. Работать над конверсией!</span>
+                  )}
+                  {pereprodazha > 0 && (
+                    <><br /><span style={{ color: COLORS.textDim }}>💰 Оборотный капитал на перепродажу: ~{fmt(pereprodazha * 2000000)} (при ср. цене авто 2М)</span></>
+                  )}
+                </div>
+              </Card>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<OperationalModel />);
+  </script>
+</body>
+</html>
